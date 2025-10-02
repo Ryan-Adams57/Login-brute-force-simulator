@@ -1,99 +1,25 @@
 # Login-brute-force-simulator
 
-Login brute-force simulator (against a local fake server)
+A safe, local, educational demonstration of login brute-force mechanics using a fake server and a simple client.
 
-#!/usr/bin/env python3
-"""
-fake_server.py
-A simple local TCP "login" server for educational brute-force testing.
+> ⚠️ **Security & legal warning**  
+> This project is only for learning. Do **not** attempt brute-force attacks against systems you do not own or do not have explicit written permission to test.
 
-Usage:
-  python3 fake_server.py
+## What this repo contains
 
-Notes:
-  - Binds to 127.0.0.1:5000 by default.
-  - Single valid credential can be changed in VALID_CREDENTIAL.
-  - Rate limiting: max_attempts per window_seconds per remote address.
-  - Designed for learning; only run locally.
-"""
+- `fake_server.py` — a local TCP "login" server (binds to 127.0.0.1:5000 by default), with per-IP rate limiting and logging.
+- `brute_client.py` — a small client that tries passwords from a wordlist against the fake server.
+- `sample_wordlist.txt` — small example wordlist.
+- Helper files for packaging and contribution.
 
-import socket
-import threading
-import time
-from collections import defaultdict
+## Why this is safe to run locally
 
-HOST = "127.0.0.1"
-PORT = 5000
+- The server only binds to `127.0.0.1` by default (local loopback). You can change host/port with CLI args.
+- Server implements a simple rate limiter (attempts per window), and logs attempts.
+- The client includes an adjustable `--delay` to avoid hammering the server.
 
-VALID_CREDENTIAL = ("alice", "S3cure-P@ss")  # change for tests
+## Quickstart
 
-# rate limiting settings
-max_attempts = 5
-window_seconds = 60
-
-# store attempts per address
-attempts = defaultdict(list)  # addr -> [timestamps]
-
-def is_rate_limited(addr):
-    now = time.time()
-    window = [t for t in attempts[addr] if now - t <= window_seconds]
-    attempts[addr] = window
-    return len(window) >= max_attempts
-
-def handle_client(conn, addr):
-    ip = addr[0]
-    with conn:
-        data = conn.recv(1024).decode(errors="ignore").strip()
-        # Expect data in "username:password" format
-        print(f"[{time.strftime('%H:%M:%S')}] Received from {ip}: {data}")
-        if is_rate_limited(ip):
-            reply = "ERROR: rate limit exceeded\n"
-            conn.sendall(reply.encode())
-            print(f"Rate-limited {ip}")
-            return
-        attempts[ip].append(time.time())
-
-        if ":" not in data:
-            conn.sendall(b"ERROR: bad format\n")
-            return
-        user, pwd = data.split(":", 1)
-        if user == VALID_CREDENTIAL[0] and pwd == VALID_CREDENTIAL[1]:
-            conn.sendall(b"OK: authenticated\n")
-            print(f"Successful login for {user} from {ip}")
-        else:
-            conn.sendall(b"FAIL: invalid credentials\n")
-
-def main():
-    print("Fake login server (local only) listening on", f"{HOST}:{PORT}")
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.bind((HOST, PORT))
-        s.listen(5)
-        while True:
-            conn, addr = s.accept()
-            t = threading.Thread(target=handle_client, args=(conn, addr), daemon=True)
-            t.start()
-
-if __name__ == "__main__":
-    main()
-
-How to run:
-
-Start server in one terminal:
-
+1. Start the fake server in one terminal:
+```bash
 python3 fake_server.py
-
-
-In another terminal, run client with a small wordlist:
-
-python3 brute_client.py sample_wordlist.txt
-
-
-sample_wordlist.txt:
-
-password
-123456
-letmein
-S3cure-P@ss
-
-
-This demonstrates brute-force mechanics safely and includes server-side rate limiting and logs.
